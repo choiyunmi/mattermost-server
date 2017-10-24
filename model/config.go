@@ -1452,7 +1452,7 @@ func (o *Config) SetDefaults() {
 	}
 
 	if o.PluginSettings.EnableUploads == nil {
-    o.PluginSettings.EnableUploads = NewBool(false)
+		o.PluginSettings.EnableUploads = NewBool(false)
 	}
 
 	if o.PluginSettings.Plugins == nil {
