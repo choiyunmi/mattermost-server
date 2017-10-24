@@ -63,12 +63,6 @@ func TestCreateUser(t *testing.T) {
 	CheckErrorMessage(t, resp, "model.user.is_valid.email.app_error")
 	CheckBadRequestStatus(t, resp)
 
-	openServer := *th.App.Config().TeamSettings.EnableOpenServer
-	canCreateAccount := th.App.Config().TeamSettings.EnableUserCreation
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.TeamSettings.EnableOpenServer = openServer })
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = canCreateAccount })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.TeamSettings.EnableOpenServer = false })
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = false })
 
@@ -185,15 +179,13 @@ func TestCreateUserWithHash(t *testing.T) {
 		data := model.MapToJson(props)
 		hash := utils.HashSha256(fmt.Sprintf("%v:%v", data, th.App.Config().EmailSettings.InviteSalt))
 
-		canCreateAccount := th.App.Config().TeamSettings.EnableUserCreation
-		defer func() {
-			th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = canCreateAccount })
-		}()
 		th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = false })
 
 		_, resp := Client.CreateUserWithHash(&user, hash, data)
 		CheckNotImplementedStatus(t, resp)
 		CheckErrorMessage(t, resp, "api.user.create_user.signup_email_disabled.app_error")
+
+		th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = true })
 	})
 
 	t.Run("EnableOpenServerDisable", func(t *testing.T) {
@@ -208,10 +200,6 @@ func TestCreateUserWithHash(t *testing.T) {
 		data := model.MapToJson(props)
 		hash := utils.HashSha256(fmt.Sprintf("%v:%v", data, th.App.Config().EmailSettings.InviteSalt))
 
-		openServer := *th.App.Config().TeamSettings.EnableOpenServer
-		defer func() {
-			th.App.UpdateConfig(func(cfg *model.Config) { *cfg.TeamSettings.EnableOpenServer = openServer })
-		}()
 		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.TeamSettings.EnableOpenServer = false })
 
 		ruser, resp := Client.CreateUserWithHash(&user, hash, data)
@@ -291,10 +279,6 @@ func TestCreateUserWithInviteId(t *testing.T) {
 	t.Run("EnableUserCreationDisable", func(t *testing.T) {
 		user := model.User{Email: GenerateTestEmail(), Nickname: "Corey Hulen", Password: "hello1", Username: GenerateTestUsername(), Roles: model.ROLE_SYSTEM_ADMIN.Id + " " + model.ROLE_SYSTEM_USER.Id}
 
-		canCreateAccount := th.App.Config().TeamSettings.EnableUserCreation
-		defer func() {
-			th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = canCreateAccount })
-		}()
 		th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = false })
 
 		inviteId := th.BasicTeam.InviteId
@@ -302,15 +286,13 @@ func TestCreateUserWithInviteId(t *testing.T) {
 		_, resp := Client.CreateUserWithInviteId(&user, inviteId)
 		CheckNotImplementedStatus(t, resp)
 		CheckErrorMessage(t, resp, "api.user.create_user.signup_email_disabled.app_error")
+
+		th.App.UpdateConfig(func(cfg *model.Config) { cfg.TeamSettings.EnableUserCreation = true })
 	})
 
 	t.Run("EnableOpenServerDisable", func(t *testing.T) {
 		user := model.User{Email: GenerateTestEmail(), Nickname: "Corey Hulen", Password: "hello1", Username: GenerateTestUsername(), Roles: model.ROLE_SYSTEM_ADMIN.Id + " " + model.ROLE_SYSTEM_USER.Id}
 
-		openServer := *th.App.Config().TeamSettings.EnableOpenServer
-		defer func() {
-			th.App.UpdateConfig(func(cfg *model.Config) { *cfg.TeamSettings.EnableOpenServer = openServer })
-		}()
 		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.TeamSettings.EnableOpenServer = false })
 
 		inviteId := th.BasicTeam.InviteId
@@ -355,6 +337,9 @@ func TestGetUser(t *testing.T) {
 	Client := th.Client
 
 	user := th.CreateUser()
+	user.Props = map[string]string{"testpropkey": "testpropvalue"}
+
+	th.App.UpdateUser(user, false)
 
 	ruser, resp := Client.GetUser(user.Id, "")
 	CheckNoError(t, resp)
@@ -363,6 +348,9 @@ func TestGetUser(t *testing.T) {
 	if ruser.Email != user.Email {
 		t.Fatal("emails did not match")
 	}
+
+	assert.NotNil(t, ruser.Props)
+	assert.Equal(t, ruser.Props["testpropkey"], "testpropvalue")
 
 	ruser, resp = Client.GetUser(user.Id, resp.Etag)
 	CheckEtag(t, ruser, resp)
@@ -374,12 +362,6 @@ func TestGetUser(t *testing.T) {
 	CheckNotFoundStatus(t, resp)
 
 	// Check against privacy config settings
-	emailPrivacy := th.App.Config().PrivacySettings.ShowEmailAddress
-	namePrivacy := th.App.Config().PrivacySettings.ShowFullName
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = emailPrivacy })
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = namePrivacy })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = false })
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = false })
 
@@ -435,12 +417,6 @@ func TestGetUserByUsername(t *testing.T) {
 	CheckNotFoundStatus(t, resp)
 
 	// Check against privacy config settings
-	emailPrivacy := th.App.Config().PrivacySettings.ShowEmailAddress
-	namePrivacy := th.App.Config().PrivacySettings.ShowFullName
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = emailPrivacy })
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = namePrivacy })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = false })
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = false })
 
@@ -499,12 +475,6 @@ func TestGetUserByEmail(t *testing.T) {
 	CheckNotFoundStatus(t, resp)
 
 	// Check against privacy config settings
-	emailPrivacy := th.App.Config().PrivacySettings.ShowEmailAddress
-	namePrivacy := th.App.Config().PrivacySettings.ShowFullName
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = emailPrivacy })
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = namePrivacy })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = false })
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = false })
 
@@ -666,12 +636,6 @@ func TestSearchUsers(t *testing.T) {
 
 	search.Term = th.BasicUser.Username
 
-	emailPrivacy := th.App.Config().PrivacySettings.ShowEmailAddress
-	namePrivacy := th.App.Config().PrivacySettings.ShowFullName
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = emailPrivacy })
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = namePrivacy })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowEmailAddress = false })
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = false })
 
@@ -824,10 +788,6 @@ func TestAutocompleteUsers(t *testing.T) {
 	CheckNoError(t, resp)
 
 	// Check against privacy config settings
-	namePrivacy := th.App.Config().PrivacySettings.ShowFullName
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = namePrivacy })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.PrivacySettings.ShowFullName = false })
 
 	th.LoginBasic()
@@ -1030,12 +990,9 @@ func TestPatchUser(t *testing.T) {
 
 	patch := &model.UserPatch{}
 
-	patch.Nickname = new(string)
-	*patch.Nickname = "Joram Wilander"
-	patch.FirstName = new(string)
-	*patch.FirstName = "Joram"
-	patch.LastName = new(string)
-	*patch.LastName = "Wilander"
+	patch.Nickname = model.NewString("Joram Wilander")
+	patch.FirstName = model.NewString("Joram")
+	patch.LastName = model.NewString("Wilander")
 	patch.Position = new(string)
 	patch.NotifyProps = model.StringMap{}
 	patch.NotifyProps["comment"] = "somethingrandom"
@@ -1063,8 +1020,7 @@ func TestPatchUser(t *testing.T) {
 		t.Fatal("NotifyProps did not update properly")
 	}
 
-	patch.Username = new(string)
-	*patch.Username = th.BasicUser2.Username
+	patch.Username = model.NewString(th.BasicUser2.Username)
 	_, resp = Client.PatchUser(user.Id, patch)
 	CheckBadRequestStatus(t, resp)
 
@@ -1091,8 +1047,7 @@ func TestPatchUser(t *testing.T) {
 	session.IsOAuth = true
 	app.AddSessionToCache(session)
 
-	patch.Email = new(string)
-	*patch.Email = GenerateTestEmail()
+	patch.Email = model.NewString(GenerateTestEmail())
 	_, resp = Client.PatchUser(user.Id, patch)
 	CheckForbiddenStatus(t, resp)
 
@@ -1562,32 +1517,6 @@ func TestUpdateUserMfa(t *testing.T) {
 
 	_, resp := Client.UpdateUserMfa(th.BasicUser.Id, "12345", false)
 	CheckForbiddenStatus(t, resp)
-
-	/*
-		team := model.Team{DisplayName: "Name", Name: "z-z-" + model.NewId() + "a", Email: "test@nowhere.com", Type: model.TEAM_OPEN}
-		rteam, _ := Client.CreateTeam(&team)
-
-		user := model.User{Email: strings.ToLower(model.NewId()) + "success+test@simulator.amazonses.com", Nickname: "Corey Hulen", Password: "passwd1"}
-		ruser, _ := Client.CreateUser(&user)
-		th.LinkUserToTeam(ruser, rteam)
-		store.Must(app.Srv.Store.User().VerifyEmail(ruser.Id))
-
-		Client.Logout()
-		_, resp := Client.UpdateUserMfa(ruser.Id, "12334", true)
-		CheckUnauthorizedStatus(t, resp)
-
-		Client.Login(user.Email, user.Password)
-		_, resp = Client.UpdateUserMfa("fail", "56789", false)
-		CheckBadRequestStatus(t, resp)
-
-		_, resp = Client.UpdateUserMfa(ruser.Id, "", true)
-		CheckErrorMessage(t, resp, "api.context.invalid_body_param.app_error")
-
-		*utils.Cfg.ServiceSettings.EnableMultifactorAuthentication = true
-
-		_, resp = Client.UpdateUserMfa(ruser.Id, "123456", false)
-		CheckNotImplementedStatus(t, resp)
-	*/
 }
 
 func TestCheckUserMfa(t *testing.T) {
@@ -1733,10 +1662,6 @@ func TestUpdateUserPassword(t *testing.T) {
 	th.LoginBasic()
 
 	// Test lockout
-	passwordAttempts := *th.App.Config().ServiceSettings.MaximumLoginAttempts
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.MaximumLoginAttempts = passwordAttempts })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.MaximumLoginAttempts = 2 })
 
 	// Fail twice
@@ -2175,10 +2100,6 @@ func TestSwitchAccount(t *testing.T) {
 	defer th.TearDown()
 	Client := th.Client
 
-	enableGitLab := th.App.Config().GitLabSettings.Enable
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.GitLabSettings.Enable = enableGitLab })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { cfg.GitLabSettings.Enable = true })
 
 	Client.Logout()
@@ -2269,10 +2190,6 @@ func TestCreateUserAccessToken(t *testing.T) {
 
 	testDescription := "test token"
 
-	enableUserAccessTokens := *th.App.Config().ServiceSettings.EnableUserAccessTokens
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = enableUserAccessTokens })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = true })
 
 	_, resp := Client.CreateUserAccessToken(th.BasicUser.Id, testDescription)
@@ -2354,10 +2271,6 @@ func TestGetUserAccessToken(t *testing.T) {
 
 	testDescription := "test token"
 
-	enableUserAccessTokens := *th.App.Config().ServiceSettings.EnableUserAccessTokens
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = enableUserAccessTokens })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = true })
 
 	_, resp := Client.GetUserAccessToken("123")
@@ -2425,10 +2338,6 @@ func TestRevokeUserAccessToken(t *testing.T) {
 
 	testDescription := "test token"
 
-	enableUserAccessTokens := *th.App.Config().ServiceSettings.EnableUserAccessTokens
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = enableUserAccessTokens })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = true })
 
 	th.App.UpdateUserRoles(th.BasicUser.Id, model.ROLE_SYSTEM_USER.Id+" "+model.ROLE_SYSTEM_USER_ACCESS_TOKEN.Id)
@@ -2447,7 +2356,7 @@ func TestRevokeUserAccessToken(t *testing.T) {
 	if !ok {
 		t.Fatal("should have passed")
 	}
-	
+
 	oldSessionToken = Client.AuthToken
 	Client.AuthToken = token.Token
 	_, resp = Client.GetMe("")
@@ -2566,10 +2475,6 @@ func TestUserAccessTokenInactiveUser(t *testing.T) {
 
 	testDescription := "test token"
 
-	enableUserAccessTokens := *th.App.Config().ServiceSettings.EnableUserAccessTokens
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = enableUserAccessTokens })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = true })
 
 	th.App.UpdateUserRoles(th.BasicUser.Id, model.ROLE_SYSTEM_USER.Id+" "+model.ROLE_SYSTEM_USER_ACCESS_TOKEN.Id)
@@ -2593,10 +2498,6 @@ func TestUserAccessTokenDisableConfig(t *testing.T) {
 
 	testDescription := "test token"
 
-	enableUserAccessTokens := *th.App.Config().ServiceSettings.EnableUserAccessTokens
-	defer func() {
-		th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = enableUserAccessTokens })
-	}()
 	th.App.UpdateConfig(func(cfg *model.Config) { *cfg.ServiceSettings.EnableUserAccessTokens = true })
 
 	th.App.UpdateUserRoles(th.BasicUser.Id, model.ROLE_SYSTEM_USER.Id+" "+model.ROLE_SYSTEM_USER_ACCESS_TOKEN.Id)

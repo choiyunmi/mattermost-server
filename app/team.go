@@ -304,7 +304,7 @@ func (a *App) joinUserToTeam(team *model.Team, user *model.User) (*model.TeamMem
 		}
 	} else {
 		// Membership appears to be missing.  Lets try to add.
-		if tmr := <-a.Srv.Store.Team().SaveMember(tm); tmr.Err != nil {
+		if tmr := <-a.Srv.Store.Team().SaveMember(tm, *a.Config().TeamSettings.MaxUsersPerTeam); tmr.Err != nil {
 			return nil, false, tmr.Err
 		} else {
 			return tmr.Data.(*model.TeamMember), false, nil
@@ -675,7 +675,7 @@ func (a *App) InviteNewUsersToTeam(emailList []string, teamId, senderId string) 
 	}
 
 	nameFormat := *a.Config().TeamSettings.TeammateNameDisplay
-	SendInviteEmails(team, user.GetDisplayName(nameFormat), emailList, utils.GetSiteURL())
+	a.SendInviteEmails(team, user.GetDisplayName(nameFormat), emailList, utils.GetSiteURL())
 
 	return nil
 }
